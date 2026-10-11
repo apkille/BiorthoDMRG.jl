@@ -1,20 +1,21 @@
 # Visual tests
 
-The two examples below run `biorthodmrg` on models where the answer is known
-independently, so the plots can be checked by eye. Both use these packages:
+The three examples below run `biorthodmrg` on models where the answer is known
+independently, so the plots can be checked by eye. They use these packages:
 
 ```julia
 using ITensors, ITensorMPS, BiorthoDMRG, GLMakie
 using LinearAlgebra: eigen, norm
-using BiorthoDMRG.Models: ising_imaginary_field, nonreciprocal_ssh
+using BiorthoDMRG.Models: doubled_siteinds, ising_imaginary_field, lindbladian,
+    nonreciprocal_ssh, vectorized_identity, xxz
 ```
 
 ## Skin effect in the non-reciprocal SSH chain
 
-Here we look at the non-reciprocal SSH chain which makes a good first test because, on an open chain,
-it is related to an ordinary Hermitian SSH chain by a similarity transformation,
-so we know exactly what its left and right eigenvectors look like. Writing $H_0$
-for the Hermitian chain with intracell hopping
+Here we look at the non-reciprocal SSH chain, which makes a good first test because,
+on an open chain, it is related to an ordinary Hermitian SSH chain by a similarity
+transformation, so we know exactly what its left and right eigenvectors look like.
+Writing $H_0$ for the Hermitian chain with intracell hopping
 $t_1' = \mathrm{sign}(t_1)\sqrt{t_1^2 - \gamma^2/4}$, we have
 
 ```math
@@ -64,7 +65,7 @@ nR, nL, nB, nH = density(psi, psi), density(chi, chi), density(chi, psi), densit
 x = 1:N
 fig = Figure(size = (1000, 400))
 
-ax1 = Axis(fig[1, 1]; xlabel = "site", ylabel = "density", title = "Half-filled ground state")
+ax1 = Axis(fig[1, 1]; xlabel = "site", ylabel = "density")
 scatterlines!(ax1, x, real.(nR); label = "right  ⟨ψ|n|ψ⟩/⟨ψ|ψ⟩")
 scatterlines!(ax1, x, real.(nL); label = "left  ⟨χ|n|χ⟩/⟨χ|χ⟩")
 scatter!(ax1, x, real.(nB); marker = :xcross, markersize = 14, label = "biorthogonal  ⟨χ|n|ψ⟩")
@@ -72,7 +73,7 @@ lines!(ax1, x, real.(nH); color = :black, linestyle = :dash, label = "Hermitian 
 axislegend(ax1; position = :ct)
 
 r = obs.residuals
-ax2 = Axis(fig[1, 2]; xlabel = "sweep", ylabel = "relative residual", yscale = log10, title = "Convergence")
+ax2 = Axis(fig[1, 2]; xlabel = "sweep", ylabel = "relative residual", yscale = log10)
 scatterlines!(ax2, 1:length(r), max.(first.(r), eps()); label = "ψ")
 scatterlines!(ax2, 1:length(r), max.(last.(r), eps()); label = "χ")
 axislegend(ax2)
@@ -87,7 +88,7 @@ With these parameters the right density sits near 0.74 on the A sites, the left
 density is its reflection, and the biorthogonal markers fall on the dashed line. As expected!
 
 Making $\gamma$ larger increases the A/B imbalance, and with it the condition
-number, which grows monotonically with $\gamma$. 
+number, which grows monotonically with $\gamma$.
 
 ## Exceptional point of the Ising chain in an imaginary field
 
@@ -112,7 +113,6 @@ $\kappa \propto (h_z^c - h_z)^{-1/2}$.
 The code finds $h_z^c$ by exact diagonalization, runs `biorthodmrg` at
 logarithmically spaced distances below it, and compares the energies and
 condition numbers with the exact ones.
-
 
 Run it!
 ```julia
@@ -187,3 +187,77 @@ symmetrically. The `biorthodmrg` energies, in red, sit on the lower branch with
 vanishing imaginary part. In the last panel the condition numbers from
 `biorthodmrg` fall on the exact curve, and both bend toward the slope $-1/2$ as
 $h_z$ approaches $h_z^c$. As expected!
+
+## Steady state of the boundary-driven XXZ chain
+
+The last example is for an open system with a Lindbladian. 
+Specifically, we consider an XXZ chain pumped at its left end, with
+jump operator $\sqrt{\varepsilon}\,S^+_1$, and drained at its right end, with
+$\sqrt{\varepsilon}\,S^-_N$, so that magnetization flows through it from left to
+right. 
+
+After vectorizing $\rho$, the Lindbladian becomes an ordinary non-Hermitian
+operator, and its steady state is the right eigenvector with eigenvalue $0$. Every
+other eigenvalue has a negative real part, so `which = :LR` picks it out. Trace
+preservation means the vectorized identity is an exact left eigenvector, so `chi`
+should come out proportional to it, and expectation values are computed with the
+identity itself, as $\operatorname{tr}(O\rho)/\operatorname{tr}\rho$. We start the
+sweeps from the infinite-temperature state.
+
+Two properties of the steady state can be checked by eye. Reflecting the chain,
+$j \to N + 1 - j$, together with a global spin flip leaves $H$ unchanged and
+swaps the two jump operators, $S^+_1 \leftrightarrow S^-_N$, so it maps the
+Lindbladian to itself. The steady state is unique, so it must be invariant as
+well, and that forces the magnetization profile to be antisymmetric,
+$\langle S^z_j\rangle = -\langle S^z_{N+1-j}\rangle$. In the bulk only the
+Hamiltonian acts, and $i[H, S^z_k] = j_{k-1} - j_k$ with spin current
+$j_k = \tfrac{i}{2}(S^+_k S^-_{k+1} - S^-_k S^+_{k+1})$, so in the steady state the
+current has to be the same on every bond.
+
+Run it!
+```julia
+N, ε = 10, 0.5
+s = siteinds("S=1/2", N)
+d = doubled_siteinds(s)
+id = vectorized_identity(d)
+jumps = [sqrt(ε) * op("S+", s[1]), sqrt(ε) * op("S-", s[N])]
+kw = (; nsweeps = 20, maxdim = [32, 64], cutoff = 1e-10, outputlevel = 0,
+    solver = sssolver, eigsolve_tol = 1e-10, eigsolve_krylovdim = 30, eigsolve_maxiter = 10)
+
+# tr(Aᵢ Bⱼ ρ) / tr ρ for single-site operators A on site i and B on site j
+avg(rho, A, i, B = "Id", j = i) = inner(id, apply(op(A, s[i]), apply(op(B, s[j]), rho))) / inner(id, rho)
+
+Δs = (0.5, 1.0, 1.5)
+results = map(Δs) do Δ
+    λ, chi, rho = biorthodmrg(lindbladian(xxz(s; Δ), jumps, d), id; kw...)
+    @show Δ λ
+    mz = [real(avg(rho, "Sz", j)) for j in 1:N]
+    jz = [real(im / 2 * (avg(rho, "S+", k, "S-", k + 1) - avg(rho, "S-", k, "S+", k + 1))) for k in 1:(N - 1)]
+    (; mz, jz)
+end
+
+fig = Figure(size = (1000, 400))
+ax1 = Axis(fig[1, 1]; xlabel = "site", ylabel = "⟨Sᶻ⟩")
+ax2 = Axis(fig[1, 2]; xlabel = "bond", ylabel = "⟨j⟩")
+for (Δ, r) in zip(Δs, results)
+    scatterlines!(ax1, 1:N, r.mz; label = "Δ = $Δ")
+    scatterlines!(ax2, 1:(N - 1), r.jz; label = "Δ = $Δ")
+end
+axislegend(ax1; position = :lb)
+
+save("driven_xxz.png", fig)
+fig
+```
+
+![driven_xxz](driven_xxz.png)
+
+Each magnetization profile is antisymmetric about the middle of the chain and stays
+within $\pm 1/2$, each current is flat across the bonds, and the printed $\lambda$ is
+zero. The currents also obey the balance at the pumped end: in the steady state the
+pump injects $\varepsilon(1/2 - \langle S^z_1\rangle)$ per unit time, which must equal
+the current through the first bond, and with $\varepsilon = 0.5$ this gives $0.175$
+for $\Delta = 0.5$ and $0.047$ for $\Delta = 1$, the values in the right panel. With
+$\Delta = 0.5$ the bulk magnetization is nearly flat and the current is large, the
+signature of ballistic transport. At $\Delta = 1$ the profile becomes a smooth
+gradient, and at $\Delta = 1.5$ a domain wall, with the current almost entirely
+suppressed. As expected!
