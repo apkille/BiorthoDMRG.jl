@@ -81,7 +81,7 @@ save("ssh_skin_effect.png", fig)
 fig
 ```
 
-![ising_exceptional_point](ising_exceptional_point.png)
+![ssh_skin_effect](ssh_skin_effect.png)
 
 With these parameters the right density sits near 0.74 on the A sites, the left
 density is its reflection, and the biorthogonal markers fall on the dashed line. As expected!
@@ -179,7 +179,7 @@ save("ising_exceptional_point.png", fig)
 fig
 ```
 
-![ssh_skin_effect](ssh_skin_effect.png)
+![ising_exceptional_point](ising_exceptional_point.png)
 
 In the first two panels the real parts of the two lowest levels merge at the
 dashed line, while their imaginary parts, zero up to that point, open up
