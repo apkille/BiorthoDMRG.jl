@@ -5,9 +5,14 @@ Model Hamiltonians as MPOs, for examples and tests. All chains are open.
 """
 module Models
 
-using ITensorMPS: MPO, OpSum
+using ITensors: ITensor, Index, addtags, commonind, dag, delta, dense, dim, hascommoninds, inds,
+    onehot, op, prime, replaceind, replaceinds, replaceprime, sim, swapprime
+using ITensorMPS: MPO, MPS, OpSum
 
-export ising_imaginary_field, nonreciprocal_ssh, xxz
+export doubled_siteinds, ising_imaginary_field, lindbladian, nonreciprocal_ssh,
+    vectorized_identity, xxz
+
+include("lindblad.jl")
 
 """
     xxz(sites; Δ, g = 0.0, J = 1.0, h = 0.0)

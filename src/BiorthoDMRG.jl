@@ -13,13 +13,13 @@ module BiorthoDMRG
 using ITensors: ITensors, ITensor, Index, array, commonind, dag, dim, hasqns, hassameinds,
     itensor, noprime, prime, replaceind, scalar, sim, swapprime, uniqueinds, onehot
 using ITensorMPS: ITensorMPS, MPO, MPS, Sweeps, inner, maxlinkdim, siteind
-using KrylovKit: EigSorter, eigsolve
+using KrylovKit: EigSorter, eigsolve, linsolve
 using LinearAlgebra: LinearAlgebra, Diagonal, norm, rmul!
 using Printf: @printf
 
 export AbstractBiorthoProjMPO, BiorthoObserver, BiorthoProjMPO, BiorthoProjMPO_MPS,
     BiorthoProjMPS, adjoint_mpo, adjoint_product, biorthodmrg, biorthogonalize!,
-    biorthoproblemsolver, biorthoreplacebond!, condition_number, residuals
+    biorthoproblemsolver, sssolver, biorthoreplacebond!, condition_number, residuals
 
 include("environments.jl")
 include("projmpo.jl")

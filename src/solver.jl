@@ -17,6 +17,36 @@ function _adjoint_which(which::Symbol, E::Number, phi_chi::ITensor)
 end
 
 """
+    sssolver(P, phi_psi, phi_chi; tol, krylovdim, maxiter, verbosity)
+
+Local solver for the steady state of a Lindbladian, used as
+`biorthodmrg(𝓛, id; solver = sssolver)` with `id = vectorized_identity(d)`.
+
+`phi_chi` is the local block of the vectorized identity, which is an exact left
+null vector of `P`, so the steady state is a right null vector and there is no
+eigenvalue to select. The solver writes it as `x = x₀ + y`, with `x₀ = phi_psi`
+rescaled to unit trace and `y` orthogonal to `phi_chi`, and solves `P y = -P x₀`
+with GMRES inside that orthogonal complement, so the trace stays fixed.
+`phi_chi` is returned unchanged and `x` is normalized so that `⟨phi_chi|x⟩ = 1`.
+The returned value is the Rayleigh quotient of `x`, zero at convergence, and
+`info.residual` is `‖P x‖ / ‖x‖`.
+"""
+function sssolver(
+        P::AbstractBiorthoProjMPO, phi_psi::ITensor, phi_chi::ITensor;
+        tol::Real = 1.0e-14, krylovdim::Int = 30, maxiter::Int = 10, verbosity::Int = 0, kwargs...,
+    )
+    û = phi_chi / norm(phi_chi)
+    project(v) = v - û * scalar(dag(û) * v)
+    x0 = phi_psi / scalar(dag(û) * phi_psi)
+    y, _ = linsolve(v -> project(P(project(v))), -project(P(x0)), 0 * x0; tol, krylovdim, maxiter, verbosity)
+    x = x0 + project(y)
+    x /= scalar(dag(phi_chi) * x)
+    Px = P(x)
+    λ = scalar(dag(x) * Px) / scalar(dag(x) * x)
+    return λ, x, phi_chi, (; cosangle = 1 / (norm(phi_chi) * norm(x)), residual = norm(Px) / norm(x))
+end
+
+"""
     biorthoproblemsolver(P, phi_psi, phi_chi; which=:SR, target=:which, howmany, tol, krylovdim, maxiter, verbosity)
 
 Solve the local eigenproblem of the projected operator `P` from both sides. Arnoldi
