@@ -32,5 +32,6 @@ include("diagnostics.jl")
 include("observer.jl")
 include("bodmrg.jl")
 include("models.jl")
+include("atoms/atoms.jl")
 
 end
