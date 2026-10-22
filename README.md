@@ -6,7 +6,7 @@ A non-Hermitian $H$ has distinct right and left eigenvectors,
 H|\psi\rangle = E|\psi\rangle, \qquad \langle\chi|H = E\langle\chi| .
 ```
 
-This package finds the ground state energy of $H$ using DMRG.
+This package finds the ground state energy of $H$ using DMRG, specifically, the energy with the smallest real part.
 
 ## Usage
 
