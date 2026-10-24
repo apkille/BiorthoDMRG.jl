@@ -18,19 +18,20 @@ using LinearAlgebra: LinearAlgebra, Diagonal, norm, rmul!
 using Printf: @printf
 
 export AbstractBiorthoProjMPO, BiorthoObserver, BiorthoProjMPO, BiorthoProjMPO_MPS,
-    BiorthoProjMPS, adjoint_mpo, adjoint_product, biorthodmrg, biorthogonalize!,
-    biorthoproblemsolver, sssolver, biorthoreplacebond!, condition_number, residuals
+    BiorthoProjMPS, BiorthoProjSum, MPIBiorthoSum, MPIObserver, adjoint_mpo,
+    adjoint_product, biorthodmrg, biorthogonalize!, biorthoproblemsolver, sssolver,
+    biorthoreplacebond!, condition_number, residuals, serve!, stopservice!
 
 include("environments.jl")
 include("projmpo.jl")
 include("projmps.jl")
-include("projmpo_mps.jl")
+include("projsum.jl")
 include("factorization.jl")
 include("gauge.jl")
 include("solver.jl")
 include("diagnostics.jl")
 include("observer.jl")
+include("parallel.jl")
 include("bodmrg.jl")
 include("models.jl")
-
 end
