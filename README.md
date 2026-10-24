@@ -1,89 +1,89 @@
 # BiorthoDMRG.jl
 
-A non-Hermitian $H$ has distinct right and left eigenvectors,
+A non-Hermitian operator $H$ has different right and left eigenvectors,
 
 ```math
 H|\psi\rangle = E|\psi\rangle, \qquad \langle\chi|H = E\langle\chi| .
 ```
 
-This package finds the ground state energy of $H$ using DMRG, specifically, the energy with the smallest real part.
+BiorthoDMRG.jl computes an eigenvalue $E$ together with both eigenvectors, as matrix
+product states, with a two-site DMRG that updates the two states together. By default
+it targets the eigenvalue with the smallest real part.
 
-## Usage
+## Example
 
 ```julia
-using ITensors, ITensorMPS, BiorthogonalDMRG
+using ITensors, ITensorMPS, BiorthoDMRG
+using BiorthoDMRG.Models: xxz
+
+sites = siteinds("S=1/2", 16)
+H = xxz(sites; Δ = 0.5, g = 0.1)
+psi0 = random_mps(sites; linkdims = 10)
+kw = (; nsweeps = 10, maxdim = [20, 40, 80], cutoff = 1e-10)
 
 obs = BiorthoObserver(; H, residual_tol = 1e-6)
-E, chi, psi = biorthodmrg(
-    H, 
-    psi0; 
-    nsweeps = 10, 
-    maxdim = [20, 40, 80], 
-    cutoff = 1e-10, 
-    observer = obs
-)
-
-E1, chi1, psi1 = biorthodmrg(
-    H, 
-    [(chi, psi)], 
-    psi0, 
-    psi0; 
-    weight = 10.0,
-    nsweeps = 10, 
-    maxdim = [20, 40, 80], 
-    cutoff = 1e-10
-)
+E, chi, psi = biorthodmrg(H, psi0; observer = obs, kw...)
 ```
 
-## Implementation details
+## Basic explanation
 
-`biorthodmrg` represents both as MPSs, `psi` and `chi`, on the same sites and with the same link indices.
-
-The local problem to solve, is that bond $\ell$, each state is written as a map applied to a two-site block:
+Ordinary DMRG minimizes the Rayleigh quotient
+$\langle\psi|H|\psi\rangle / \langle\psi|\psi\rangle$. When $H$ is not normal, the
+stationary points of this quotient are not eigenvectors, because such a point would have
+to be a left and a right eigenvector at once. Biorthogonal DMRG uses the two-sided
+quotient
 
 ```math
-|\psi\rangle = P_{\ell\psi}|\phi_\psi\rangle, \qquad |\chi\rangle = P_{\ell\chi}|\phi_\chi\rangle .
+E = \frac{\langle\chi|H|\psi\rangle}{\langle\chi|\psi\rangle},
 ```
 
-$P_{\ell\psi}$ consists of every tensor of `psi` except those on sites $\ell$ and $\ell+1$, and $P_{\ell\chi}$ likewise for `chi`.
+whose stationary points are exactly the eigenvalues together with their eigenvectors.
+Varying $\langle\chi|$ gives $H|\psi\rangle = E|\psi\rangle$, and varying $|\psi\rangle$
+gives $\langle\chi|H = E\langle\chi|$.
 
-The pair is kept in the biorthonormal gauge $P_{\ell\chi}^\dagger P_{\ell\psi} = 1$. In this gauge, contracting `dag(chi[k])` with `psi[k]` gives the identity on the remaining link: over the left link and site index for $k < \ell$, and over the site index and right link for $k > \ell + 1$.
-
-The energy is the two-sided Rayleigh quotient $E = \langle\chi|H|\psi\rangle / \langle\chi|\psi\rangle$. Making it stationary with respect to $\langle\phi_\chi|$ and $|\phi_\psi\rangle$, and using the gauge, gives two eigenproblems for one operator:
+Both states are MPSs on the same sites, with the same link indices. At bond $\ell$, each
+state is a two-site block placed into the rest of its chain,
+$|\psi\rangle = P_{\ell\psi}|\phi_\psi\rangle$ and $|\chi\rangle = P_{\ell\chi}|\phi_\chi\rangle$.
+Where ordinary DMRG keeps an orthonormal gauge, the pair is kept in the biorthonormal
+gauge $P_{\ell\chi}^\dagger P_{\ell\psi} = 1$, so that
+$\langle\chi|\psi\rangle = \langle\phi_\chi|\phi_\psi\rangle$. Making $E$ stationary in
+the two blocks then gives a local eigenproblem and its adjoint,
 
 ```math
-P_{\ell\chi}^\dagger H P_{\ell\psi}|\phi_\psi\rangle = E|\phi_\psi\rangle, \qquad
-P_{\ell\psi}^\dagger H^\dagger P_{\ell\chi}|\phi_\chi\rangle = \bar{E}|\phi_\chi\rangle .
+P_{\ell\chi}^\dagger H P_{\ell\psi}\,|\phi_\psi\rangle = E\,|\phi_\psi\rangle, \qquad
+P_{\ell\psi}^\dagger H^\dagger P_{\ell\chi}\,|\phi_\chi\rangle = \bar E\,|\phi_\chi\rangle .
 ```
 
-`BiorthoProjMPO` contracts $P_{\ell\chi}^\dagger H P_{\ell\psi}$ from mixed environments, with `chi` on the bra side and `psi` on the ket side. Its adjoint uses the same environments, read from the other side.
+Both are solved with Arnoldi, and the blocks are normalized so that
+$\langle\phi_\chi|\phi_\psi\rangle = 1$. This is possible whenever $E$ is a simple
+eigenvalue of the local operator. The blocks are then split back into two sites in a way
+that keeps the gauge, and the sweep moves on, left to right and back, as in two-site
+DMRG.
 
-`biorthoproblemsolver` solves the right problem with Arnoldi and then the left
-problem with Arnoldi targeted at the conjugate eigenvalue, and normalizes so that
+It is important to say that there is no variational principle in biorthogonal DMRG. $E$ is a ratio of linear functions of the components
+of $\langle\chi|$ and of $|\psi\rangle$, so it is holomorphic in each, and its real part
+has no local minimum. Every stationary point is a saddle. $E$ is therefore not an upper
+bound and need not decrease from sweep to sweep.
+
+The accuracy depends on how far $H$ is from normal, through the condition number
 
 ```math
-\langle\phi_\chi|\phi_\psi\rangle = \langle\chi|\psi\rangle = 1 .
+\kappa = \frac{\|\chi\|\,\|\psi\|}{|\langle\chi|\psi\rangle|} \geq 1 .
 ```
 
-This normalization is possible whenever $E$ is a simple eigenvalue.  Of course, it fails at exceptional points, where left and right eigenvectors become orthogonal.
+Of course, it equals 1 when $|\chi\rangle \propto |\psi\rangle$, and it diverges at an exceptional
+point. There the left and right eigenvectors become orthogonal and the normalization
+above fails.
 
-`biorthoreplacebond!` splits $|\phi_\psi\rangle$ and $|\phi_\chi\rangle$ back into two sites in three steps:
-
-1. Each block is truncated by an SVD.
-2. The two kept bases are made biorthonormal using the SVD of their overlap. The singular values of that overlap are the cosines of the angles between the kept left and right subspaces.
-3. The resulting split is an oblique projection, not an orthogonal one, so truncation errors are amplified. If no cosine is dropped and both kept dimensions are equal, the relative error of each block is at most $(1 + 1/\sigma_{\min})\sqrt{\mathrm{truncerr}}$, where $\sigma_{\min}$ is the smallest kept cosine. `biortho_cutoff` drops small cosines to keep the projection well conditioned.
-
-
-The sweep alternates local solves and factorizations, left to right and back, as in two-site DMRG. The environments of both states are cached, and each step recomputes only those touching the two sites it changed.
-
-Sadly, for biorthogonality, we cannot use the variational principle. The two-sided quotient has saddle points but no minimum, so $E$ is not monotone across sweeps and is not a bound. That said, we can use two principles that take the place of the variational principle.
-
-1. Fixed points: a converged pair satisfies $P_{\ell\chi}^\dagger (H - E)|\psi\rangle = 0$ at every bond.
-2. Error bound: let $(E_j, \langle L_j|, |R_j\rangle)$ be the exact eigentriple. The error in $E$ is bilinear in the errors of the two states:
+The error in $E$ is bilinear in the errors of the two states. For any right and left
+eigenvectors $|R_j\rangle$ and $\langle L_j|$ of an exact eigenvalue $E_j$,
 
 ```math
-|E - E_j| \le \|H - E_j\| \, \kappa \, \frac{\|\chi - L_j\|}{\|\chi\|} \, \frac{\|\psi - R_j\|}{\|\psi\|},
-\qquad \kappa = \frac{\|\chi\| \, \|\psi\|}{|\langle\chi|\psi\rangle|} \ge 1 .
+E - E_j = \frac{\langle\chi - L_j|(H - E_j)|\psi - R_j\rangle}{\langle\chi|\psi\rangle},
+\qquad
+|E - E_j| \le \|H - E_j\|\,\kappa\,\frac{\|\chi - L_j\|}{\|\chi\|}\,\frac{\|\psi - R_j\|}{\|\psi\|} .
 ```
 
-Convergence is therefore judged on the residuals $\|H\psi - E\psi\|$ and $\|H^\dagger\chi - \bar{E}\chi\|$. `BiorthoObserver` records them together with $\kappa$ and stops the run once both fall below `residual_tol`.
+So $E$ converges as the product of the two state errors, amplified by $\kappa$. An accurate
+$E$ alone therefore does not certify accurate states, and convergence should be judged on the
+residuals $\|H\psi - E\psi\|/\|\psi\|$ and $\|H^\dagger\chi - \bar E\chi\|/\|\chi\|$.
