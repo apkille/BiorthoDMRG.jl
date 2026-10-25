@@ -27,10 +27,10 @@ the fastest of three runs. Every rank uses one BLAS thread, so $n$ should not ex
 number of performance cores. Paste this code into your REPL!
 
 ```julia
-using MPI, GLMakie
+using MPI, GLMakie, BiorthoDMRG
 
-dir, ns = "BiorthoDMRG.jl/tutorials", [1, 2, 4]
-script = joinpath(dir, "mpi_cylinder.jl")
+dir, ns = joinpath(pkgdir(BiorthoDMRG), "tutorials", "parallelmpo"), [1, 2, 4]
+script = joinpath(dir, "cylinder.jl")
 for n in ns
     MPI.mpiexec(cmd -> run(`$cmd -n $n $(Base.julia_cmd()) -t 1 --project=$(Base.active_project()) $script`))
 end
@@ -42,7 +42,7 @@ lines!(ax, ns, ns; color = :gray, linestyle = :dot, label = "ideal")
 scatterlines!(ax, ns, t[1] ./ t; label = "parallel MPO")
 axislegend(ax; position = :lt)
 
-save(joinpath(dir,"mpi_speedup.png"), fig)
+save(joinpath(dir, "speedup.png"), fig)
 fig
 ```
 

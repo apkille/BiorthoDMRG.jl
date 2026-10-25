@@ -11,7 +11,7 @@ normalizes ⟨φ_χ|φ_ψ⟩ = 1, and refactorizes both blocks by an oblique pro
 module BiorthoDMRG
 
 using ITensors: ITensors, ITensor, Index, array, commonind, dag, dim, hasqns, hassameinds,
-    itensor, noprime, prime, replaceind, scalar, sim, swapprime, uniqueinds, onehot
+    itensor, noprime, prime, replaceind, scalar, sim, swapprime, uniqueinds, onehot, inds
 using ITensorMPS: ITensorMPS, MPO, MPS, Sweeps, inner, maxlinkdim, siteind
 using KrylovKit: EigSorter, eigsolve, linsolve
 using LinearAlgebra: LinearAlgebra, Diagonal, norm, rmul!
@@ -20,6 +20,7 @@ using Printf: @printf
 export AbstractBiorthoProjMPO, BiorthoObserver, BiorthoProjMPO, BiorthoProjMPO_MPS,
     BiorthoProjMPS, BiorthoProjSum, MPIBiorthoSum, MPIObserver, adjoint_mpo,
     adjoint_product, biorthodmrg, biorthogonalize!, biorthoproblemsolver, sssolver,
+    MPIRealSpace, biorthosplitbond!,
     biorthoreplacebond!, condition_number, residuals, serve!, stopservice!
 
 include("environments.jl")
@@ -31,7 +32,8 @@ include("gauge.jl")
 include("solver.jl")
 include("diagnostics.jl")
 include("observer.jl")
-include("parallel.jl")
+include("parallelmpo.jl")
+include("realspace.jl")
 include("bodmrg.jl")
 include("models.jl")
 end
