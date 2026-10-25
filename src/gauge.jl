@@ -16,21 +16,21 @@ passed to `biorthoreplacebond!`. Without truncation, the states are unchanged
 when, at every bond, the kept bases of `chi` and `psi` have the same dimension
 and no overlap cosine is dropped. Otherwise they are truncated.
 """
-function biorthogonalize!(chi::MPS, psi::MPS, j::Int; normalize::Bool = true, kwargs...)
+function biorthogonalize!(
+        chi::MPS, psi::MPS, j::Int; normalize::Bool = true, cutoff::Real = eps(Float64), kwargs...,
+    )
     N = length(psi)
     (length(chi) == N && all(k -> siteind(chi, k) == siteind(psi, k), 1:N)) ||
         throw(ArgumentError("chi and psi must share their site indices"))
     1 ≤ j ≤ N || throw(BoundsError(psi, j))
     for ℓ in 1:(j - 1)
         biorthoreplacebond!(
-            chi, psi, ℓ, chi[ℓ] * chi[ℓ + 1], psi[ℓ] * psi[ℓ + 1]; 
-            ortho = "left", kwargs...
+            chi, psi, ℓ, chi[ℓ] * chi[ℓ + 1], psi[ℓ] * psi[ℓ + 1]; ortho = "left", cutoff, kwargs...
         )
     end
     for ℓ in (N - 1):-1:j
         biorthoreplacebond!(
-            chi, psi, ℓ, chi[ℓ] * chi[ℓ + 1], psi[ℓ] * psi[ℓ + 1]; 
-            ortho = "right", kwargs...
+            chi, psi, ℓ, chi[ℓ] * chi[ℓ + 1], psi[ℓ] * psi[ℓ + 1]; ortho = "right", cutoff, kwargs...
         )
     end
     if normalize
