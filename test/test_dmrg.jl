@@ -13,7 +13,7 @@ Random.seed!(1234)
     N, Δ, g, h = 8, 0.5, 0.3, 0.1
     sites = siteinds("S=1/2", N)
     psi0 = random_mps(sites; linkdims = 4)
-    kw = (; nsweeps = 10, maxdim = [10, 20, 40], cutoff = 1.0e-16, outputlevel = 0, eigsolve_krylovdim = 10)
+    kw = (; nsweeps = 10, maxdim = [10, 25, 50], cutoff = 1.0e-16, outputlevel = 0, eigsolve_krylovdim = 10)
 
     @testset "limits" begin
         @testset "N = 2 is exact diagonalization" begin
