@@ -1,4 +1,4 @@
-# mpiexecjl -n 3 julia --project test/test_mpi.jl
+# Launched by runtests.jl as `mpiexec -n 3 julia --project=<test environment> test_mpi.jl`.
 using MPI, ITensors, ITensorMPS, BiorthoDMRG, Test
 using BiorthoDMRG.Models: ising_imaginary_field, xxz
 using LinearAlgebra: norm
@@ -60,42 +60,44 @@ function product_errors(P, ref, ℓ)
     )
 end
 
-@testset "replicated products, mixed entry types" begin
-    P = MPIBiorthoSum(BiorthoProjMPO(ising_part(sites; hx, hz)), comm; mode = :replicated, checksync = true)
-    ref = BiorthoProjMPO(ising_imaginary_field(sites; hx, hz))
-    for ℓ in 1:(N - 1)
-        @test all(≤(1.0e-12), product_errors(P, ref, ℓ))
-    end
-end
-
-@testset "root-driven products, mixed entry types" begin
-    P = MPIBiorthoSum(BiorthoProjMPO(ising_part(sites; hx, hz)), comm; mode = :root)
-    if rank == 0
+@testset "MPI, rank $rank of $nranks" begin
+    @testset "replicated products, mixed entry types" begin
+        P = MPIBiorthoSum(BiorthoProjMPO(ising_part(sites; hx, hz)), comm; mode = :replicated, checksync = true)
         ref = BiorthoProjMPO(ising_imaginary_field(sites; hx, hz))
-        try
-            for ℓ in 1:(N - 1)
-                @test all(≤(1.0e-12), product_errors(P, ref, ℓ))
-            end
-        finally
-            stopservice!(P)
+        for ℓ in 1:(N - 1)
+            @test all(≤(1.0e-12), product_errors(P, ref, ℓ))
         end
-    else
-        serve!(P)
     end
-end
 
-@testset "spectrum of S H₀ S⁻¹ against Hermitian DMRG" begin
-    Δ, g = 0.5, 0.1
-    P = MPIBiorthoSum(BiorthoProjMPO(xxz_part(sites; Δ, g)), comm; mode = :root)
-    if rank == 0
-        E = try
-            first(biorthodmrg(P, psi, psi; nsweeps = 10, maxdim = 32, cutoff = 1.0e-12, outputlevel = 0))
-        finally
-            stopservice!(P)
+    @testset "root-driven products, mixed entry types" begin
+        P = MPIBiorthoSum(BiorthoProjMPO(ising_part(sites; hx, hz)), comm; mode = :root)
+        if rank == 0
+            ref = BiorthoProjMPO(ising_imaginary_field(sites; hx, hz))
+            try
+                for ℓ in 1:(N - 1)
+                    @test all(≤(1.0e-12), product_errors(P, ref, ℓ))
+                end
+            finally
+                stopservice!(P)
+            end
+        else
+            serve!(P)
         end
-        E0, _ = dmrg(xxz(sites; Δ, g = 0.0), psi; nsweeps = 10, maxdim = 32, cutoff = 1.0e-12, outputlevel = 0)
-        @test abs(E - E0) ≤ 1.0e-8 * abs(E0)
-    else
-        serve!(P)
+    end
+
+    @testset "spectrum of S H₀ S⁻¹ against Hermitian DMRG" begin
+        Δ, g = 0.5, 0.1
+        P = MPIBiorthoSum(BiorthoProjMPO(xxz_part(sites; Δ, g)), comm; mode = :root)
+        if rank == 0
+            E = try
+                first(biorthodmrg(P, psi, psi; nsweeps = 10, maxdim = 32, cutoff = 1.0e-12, outputlevel = 0))
+            finally
+                stopservice!(P)
+            end
+            E0, _ = dmrg(xxz(sites; Δ, g = 0.0), psi; nsweeps = 10, maxdim = 32, cutoff = 1.0e-12, outputlevel = 0)
+            @test abs(E - E0) ≤ 1.0e-8 * abs(E0)
+        else
+            serve!(P)
+        end
     end
 end
