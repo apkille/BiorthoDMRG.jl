@@ -1,0 +1,9 @@
+[deps]
+BiorthoDMRG = "509cdfdc-344b-48e6-a1e4-b4bfbdd763c3"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+
+[compat]
+Documenter = "1"
+
+[sources]
+BiorthoDMRG = {path = ".."}

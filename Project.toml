@@ -23,11 +23,13 @@ KrylovKit = "0.8.1, 0.9, 0.10"
 LinearAlgebra = "1.10"
 MPI = "0.20"
 Printf = "1.10"
+Random = "1.10"
 julia = "1.10"
 
 [extras]
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["MPI", "Test"]
+test = ["MPI", "Random", "Test"]
