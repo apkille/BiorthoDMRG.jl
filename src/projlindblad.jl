@@ -2,29 +2,29 @@
     LindbladProjMPO(𝓛::MPO)
 
 The Lindbladian `𝓛`, an MPO on doubled sites ordered as by `doubled_siteinds`, projected
-onto the open window of `rho` for the steady-state problem. The left state is held fixed
-at the vectorized identity `|1⟩`, which the site indices of `𝓛` determine; it is stored
-in `id` as an MPS of deltas and is never updated or truncated. `rho` is in the mixed
-canonical gauge, so its blocks `L_ρ` and `R_ρ` outside the window are isometries. The
-bra side is the test map `P_{ℓ1} = L₁ ⊗ 1 ⊗ R₁`, with
+onto a window of `rho` for the steady-state problem. The window covers two physical sites,
+the four doubled sites `ℓ:ℓ+3` with `ℓ` odd, or the whole chain when it has one physical
+site, so both of its cuts lie between physical sites. The left state is held fixed at the
+vectorized identity `|1⟩`, which the site indices of `𝓛` determine; it is stored in `id`
+as an MPS of deltas and is never updated or truncated. `rho` is in the mixed canonical
+gauge, so its blocks `L_ρ` and `R_ρ` outside the window are isometries.
 
-    L₁ = L_ρ + (1 - L_ρ L_ρ†) |1_L⟩ ⟨1_L|L_ρ L_ρ†|1_L⟩⁻¹ ⟨1_L|L_ρ,
+Across a cut between physical sites `|1⟩ = |1_L⟩ ⊗ |1_ℓ⟩ ⊗ |1_R⟩` factorizes, and the bra
+side is the test map `P_{ℓ1} = L₁ ⊗ 1 ⊗ R₁` with
 
-`|1_L⟩` the left block of `id`, and `R₁` the mirror image of `L₁`. Then `L₁† L_ρ = 1`
-and `L₁ L_ρ† |1_L⟩ = |1_L⟩`, so `P_{ℓ1}† P_{ℓρ} = 1` and `P_{ℓ1} |φ₁⟩ = |1⟩` with
-`|φ₁⟩ = P_{ℓρ}† |1⟩`. Since `⟨1|𝓛 = 0`, `⟨φ₁|` is an exact left null vector of the
-projected operator `P_{ℓ1}† 𝓛 P_{ℓρ}`, and `⟨φ₁|phi⟩ = ⟨1|rho⟩` for the window tensor
-`phi` of `rho`.
+    L₁ = L_ρ + (1 - L_ρ L_ρ†) |1_L⟩⟨1_L|L_ρ / ⟨1_L|L_ρ L_ρ†|1_L⟩
 
-Where `id` factorizes across a cut, `⟨1_L|L_ρ L_ρ†|1_L⟩` is a number, nonzero whenever
-`⟨1|rho⟩ ≠ 0`. Between the ket and bra copies of a site it is a matrix of the local
-dimension, which must be invertible, and `position!` throws otherwise.
+and `R₁` its mirror image. Then `L₁† L_ρ = 1` and `L₁ L_ρ† |1_L⟩ = |1_L⟩`, so
+`P_{ℓ1}† P_{ℓρ} = 1` and `P_{ℓ1} |φ₁⟩ = |1⟩` with `|φ₁⟩ = P_{ℓρ}† |1⟩`. Since `⟨1|𝓛 = 0`,
+`⟨φ₁|` is an exact left null vector of the projected operator `P_{ℓ1}† 𝓛 P_{ℓρ}`, and
+`⟨φ₁|phi⟩ = ⟨1|rho⟩` for the window tensor `phi` of `rho`. The denominator is
+`‖⟨1_L|L_ρ‖²`, nonzero whenever `⟨1|rho⟩ ≠ 0`.
 
 `env`, `idenv` and `trenv` cache the environments of `⟨rho|𝓛|rho⟩`, `⟨1|𝓛|rho⟩` and
 `⟨1|rho⟩`, from which `position!` assembles `envL = L₁†(·)L_ρ` and `envR = R₁†(·)R_ρ`.
-`bra1` is `⟨φ₁|`, and `cosine` is `‖φ₁‖/‖1‖`, the cosine between `|1⟩` and the range of
-`P_{ℓρ}`; it equals `1/‖P_{ℓ1}‖` where `id` factorizes across both cuts. `id` has its
-own link indices, so they cannot collide with those of `rho`.
+`bra1` is `⟨φ₁|`, and `cosine` is `‖φ₁‖/‖1‖ = 1/‖P_{ℓ1}‖`, the cosine between `|1⟩` and
+the range of `P_{ℓρ}`. `id` has its own link indices, so they cannot collide with those
+of `rho`.
 """
 mutable struct LindbladProjMPO
     𝓛::MPO
@@ -53,31 +53,36 @@ Base.length(P::LindbladProjMPO) = length(P.𝓛)
 
 (P::LindbladProjMPO)(v::ITensor) = ITensors.product(P, v)
 
+# Doubled sites in a window: two physical sites, or the one site of a one-site chain.
+_windowsize(P::LindbladProjMPO) = min(4, length(P))
+
 # Environment of the test map at one cut of the window, from the environments `A`, `B`
 # and `C` of ⟨rho|𝓛|rho⟩, ⟨1|𝓛|rho⟩ and ⟨1|rho⟩ on that side, where `λ` and `μ` are the
-# links of `rho` and `id` at the cut:
+# links of `rho` and `id` at the cut. The cut lies between physical sites, so `μ` has
+# dimension 1, `C = ⟨1_L|L_ρ` is a row vector, and
 #
-#     L₁†(·)L_ρ = L_ρ†(·)L_ρ + C⁺ (⟨1_L|(·)L_ρ - C L_ρ†(·)L_ρ),    C = ⟨1_L|L_ρ,
+#     L₁†(·)L_ρ = L_ρ†(·)L_ρ + C† (⟨1_L|(·)L_ρ - C L_ρ†(·)L_ρ) / ‖C‖².
 #
-# with C⁺ = L_ρ†|1_L⟩ ⟨1_L|L_ρ L_ρ†|1_L⟩⁻¹ the pseudoinverse of C when C has full row
-# rank. The same function gives R₁†(·)R_ρ from the right environments.
+# The same function gives R₁†(·)R_ρ from the right environments.
 function _testenv(A::ITensor, B::ITensor, C::ITensor, λ::Index, μ::Index)
-    F = LinearAlgebra.svd(array(C, μ, λ))
-    (length(F.S) == dim(μ) && last(F.S) > sqrt(eps(Float64)) * first(F.S)) ||
-        error("the identity has no full-rank image in the kept space of rho at this bond")
-    pinvC = itensor(F.V * Diagonal(inv.(F.S)) * F.U', λ', μ')
-    return A + pinvC * (B - replaceinds(C, (λ, μ), (λ', μ')) * A)
+    nC = norm(C)
+    iszero(nC) && error("⟨1_L|L_ρ = 0, so rho is traceless")
+    Cdag = replaceinds(dag(C), (λ, μ), (λ', μ'))
+    return A + Cdag * (B - replaceinds(C, (λ, μ), (λ', μ')) * A) / nC^2
 end
 
 function ITensorMPS.position!(P::LindbladProjMPO, rho::MPS, ℓ::Int)
-    reposition!(P.env, P.𝓛, rho, rho, ℓ)
-    reposition!(P.idenv, P.𝓛, P.id, rho, ℓ)
-    reposition!(P.trenv, nothing, P.id, rho, ℓ)
+    isodd(ℓ) || throw(ArgumentError("a window starts at the ket copy of a site, at odd ℓ, got ℓ = $ℓ"))
+    n = _windowsize(P)
+    reposition!(P.env, P.𝓛, rho, rho, ℓ; nsite = n)
+    reposition!(P.idenv, P.𝓛, P.id, rho, ℓ; nsite = n)
+    reposition!(P.trenv, nothing, P.id, rho, ℓ; nsite = n)
+    r = ℓ + n - 1
     P.envL = ℓ == 1 ? lenv(P.env) : _testenv(
         lenv(P.env), lenv(P.idenv), lenv(P.trenv), linkind(rho, ℓ - 1), linkind(P.id, ℓ - 1)
     )
-    P.envR = ℓ == length(P) - 1 ? renv(P.env) : _testenv(
-        renv(P.env), renv(P.idenv), renv(P.trenv), linkind(rho, ℓ + 1), linkind(P.id, ℓ + 1)
+    P.envR = r == length(P) ? renv(P.env) : _testenv(
+        renv(P.env), renv(P.idenv), renv(P.trenv), linkind(rho, r), linkind(P.id, r)
     )
     P.bra1 = _projbra(P.trenv, P.id)
     P.cosine = norm(P.bra1) / P.idnorm

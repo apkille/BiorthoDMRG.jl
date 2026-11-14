@@ -80,16 +80,17 @@ Random.seed!(1234)
         P1 = LindbladProjMPO(MPO(d, "Id"))
         @test all(k -> siteind(P.id, k) == d[k], eachindex(d))
         rho = random_mps(ComplexF64, d; linkdims = 4)
-        for ℓ in 1:(length(d) - 1)
+        for ℓ in 1:2:(length(d) - 3)
             orthogonalize!(rho, ℓ)
             ITensorMPS.position!(P, rho, ℓ)
             ITensorMPS.position!(P1, rho, ℓ)
-            phi = rho[ℓ] * rho[ℓ + 1]
+            phi = prod(k -> rho[k], ℓ:(ℓ + 3))
             v = random_itensor(ComplexF64, inds(phi))
             @test P1(v) ≈ v
             @test abs(scalar(P.bra1 * P(v))) ≤ 1.0e-10 * norm(P.bra1) * norm(P(v))
             @test scalar(P.bra1 * phi) ≈ inner(id, rho)
         end
+        @test_throws ArgumentError ITensorMPS.position!(P, rho, 2)
     end
 
     @testset "steadystate: single qubit with amplitude damping" begin
@@ -113,6 +114,7 @@ Random.seed!(1234)
         F = eigen(dense_matrix(𝓛, d))
         v = F.vectors[:, argmax(real.(F.values))]
         obs = BiorthoObserver(; H = 𝓛)
+        # from the identity the first window's local steady state is pure
         λ, rho = steadystate(𝓛; observer = obs, sskw...)
         r = dense_vector(rho, d)
         @test abs(λ) ≤ 1.0e-8
