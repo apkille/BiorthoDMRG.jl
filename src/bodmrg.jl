@@ -20,17 +20,17 @@ With one initial state, `chi0 = psi0`. With `refs`, previously converged pairs
 `(chi_i, psi_i)` are deflated by shifting their eigenvalues by `weight`. The last
 form takes any projected operator and a `Sweeps` object; the others build both.
 
-`which` selects the eigenvalue as in `KrylovKit.eigsolve`. `target` and `howmany`
-choose among Ritz pairs as in `biorthoproblemsolver`. `basis` chooses `:shared`
-(stable, larger bond dimension) or `:biorthonormal` (compact, unbounded local
-spectrum); see `biorthoreplacebond!`. `biortho_cutoff` drops cosines between the
-kept left and right bases at or below it, and applies only to `:biorthonormal`.
-`observer` is an ITensorMPS observer or a `BiorthoObserver`. `outputlevel` and
-the `eigsolve_*` keywords are as in `ITensorMPS.dmrg`. `noise` must be zero and
-indices must be dense.
+Each bond update calls `biorthoproblemsolver`. `which` selects the eigenvalue as in
+`KrylovKit.eigsolve`, and `target` and `howmany` choose among Ritz pairs. `basis`
+chooses `:shared` (stable, larger bond dimension) or `:biorthonormal` (compact,
+unbounded local spectrum); see `biorthoreplacebond!`. `biortho_cutoff` drops cosines
+between the kept left and right bases at or below it, and applies only to
+`:biorthonormal`. `observer` is an ITensorMPS observer or a `BiorthoObserver`.
+`outputlevel` and the `eigsolve_*` keywords are as in `ITensorMPS.dmrg`. `noise` must
+be zero and indices must be dense.
 
-`solver` is the local solver: the default solves the two-sided eigenproblem,
-and `sssolver` finds a Lindbladian steady state.
+For the steady state of a Lindbladian, whose eigenvalue and left eigenvector are known,
+use `steadystate`.
 """
 function biorthodmrg(
         PH::AbstractBiorthoProjMPO, chi0::MPS, psi0::MPS, sweeps::Sweeps;
@@ -38,7 +38,6 @@ function biorthodmrg(
         basis::Symbol = :shared, biortho_cutoff::Real = sqrt(eps(Float64)),
         observer = ITensorMPS.NoObserver(), outputlevel::Int = 1, eigsolve_tol::Real = 1.0e-14,
         eigsolve_krylovdim::Int = 3, eigsolve_maxiter::Int = 1, eigsolve_verbosity::Int = 0,
-        solver = biorthoproblemsolver
     )
     nsw = ITensorMPS.nsweep(sweeps)
     any(sw -> ITensorMPS.noise(sweeps, sw) > 0, 1:nsw) &&
@@ -59,14 +58,17 @@ function biorthodmrg(
         elapsed = @elapsed for (ℓ, ha) in ITensorMPS.sweepnext(N)
             ITensorMPS.position!(PH, chi, psi, ℓ)
             energy, phi_psi, phi_chi, solve_info =
-                solver(PH, psi[ℓ] * psi[ℓ + 1], chi[ℓ] * chi[ℓ + 1]; solver_kwargs...)
+                biorthoproblemsolver(PH, psi[ℓ] * psi[ℓ + 1], chi[ℓ] * chi[ℓ + 1]; solver_kwargs...)
             bond_info = biorthoreplacebond!(
                 chi, psi, ℓ, phi_chi, phi_psi;
                 ortho = ha == 1 ? "left" : "right", basis, biortho_cutoff,
                 maxdim = ITensorMPS.maxdim(sweeps, sw), mindim = ITensorMPS.mindim(sweeps, sw),
                 cutoff = ITensorMPS.cutoff(sweeps, sw),
             )
-            stats = _merge_stats(stats, solve_info, bond_info)
+            stats = _merge_stats(
+                stats, solve_info; sigma_min = bond_info.sigma_min,
+                truncerr = max(bond_info.spec_psi.truncerr, bond_info.spec_chi.truncerr),
+            )
             ITensorMPS.measure!(
                 observer; energy, psi, projected_operator = PH, bond = ℓ, sweep = sw,
                 half_sweep = ha, spec = bond_info.spec_psi, outputlevel, sweep_is_done = (ℓ == 1 && ha == 2),

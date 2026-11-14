@@ -12,6 +12,7 @@ Random.seed!(1234)
 @testset "Lindbladian" begin
     Δ = 0.5
     kw = (; nsweeps = 10, maxdim = [10, 20, 40], cutoff = 1.0e-16, outputlevel = 0, eigsolve_krylovdim = 8)
+    sskw = (; nsweeps = 10, maxdim = [10, 20, 40], cutoff = 1.0e-16, outputlevel = 0)
 
     @testset "single qubit with amplitude damping" begin
         γ = 0.7
@@ -67,5 +68,60 @@ Random.seed!(1234)
         @test abs(λ) ≤ 1.0e-8
         @test abs(dot(v, r)) ≈ norm(v) * norm(r) rtol = 1.0e-6
         @test abs(inner(chi, one)) ≈ nrm(chi) * nrm(one) rtol = 1.0e-6
+    end
+
+    @testset "LindbladProjMPO: P_{ℓ1}†P_{ℓρ} = 1 and ⟨φ₁| is a left null vector" begin
+        ε = 0.5
+        s = siteinds("S=1/2", 3)
+        d = doubled_siteinds(s)
+        id = vectorized_identity(d)
+        𝓛 = lindbladian(xxz(s; Δ), [sqrt(ε) * op("S+", s[1]), sqrt(ε) * op("S-", s[3])], d)
+        P = LindbladProjMPO(𝓛)
+        P1 = LindbladProjMPO(MPO(d, "Id"))
+        @test all(k -> siteind(P.id, k) == d[k], eachindex(d))
+        rho = random_mps(ComplexF64, d; linkdims = 4)
+        for ℓ in 1:(length(d) - 1)
+            orthogonalize!(rho, ℓ)
+            ITensorMPS.position!(P, rho, ℓ)
+            ITensorMPS.position!(P1, rho, ℓ)
+            phi = rho[ℓ] * rho[ℓ + 1]
+            v = random_itensor(ComplexF64, inds(phi))
+            @test P1(v) ≈ v
+            @test abs(scalar(P.bra1 * P(v))) ≤ 1.0e-10 * norm(P.bra1) * norm(P(v))
+            @test scalar(P.bra1 * phi) ≈ inner(id, rho)
+        end
+    end
+
+    @testset "steadystate: single qubit with amplitude damping" begin
+        γ = 0.7
+        s = siteinds("S=1/2", 1)
+        d = doubled_siteinds(s)
+        id = vectorized_identity(d)
+        𝓛 = lindbladian(0 * MPO(s, "Id"), [sqrt(γ) * op("S-", s[1])], d)
+        λ, rho = steadystate(𝓛; sskw...)
+        @test abs(λ) ≤ 1.0e-10
+        @test inner(id, rho) ≈ 1
+        @test inner(id, apply(op("Sz", s[1]), rho)) ≈ -1 / 2
+    end
+
+    @testset "steadystate: driven XXZ against exact diagonalization" begin
+        ε = 0.5
+        s = siteinds("S=1/2", 4)
+        d = doubled_siteinds(s)
+        id = vectorized_identity(d)
+        𝓛 = lindbladian(xxz(s; Δ), [sqrt(ε) * op("S+", s[1]), sqrt(ε) * op("S-", s[4])], d)
+        F = eigen(dense_matrix(𝓛, d))
+        v = F.vectors[:, argmax(real.(F.values))]
+        obs = BiorthoObserver(; H = 𝓛)
+        λ, rho = steadystate(𝓛; observer = obs, sskw...)
+        r = dense_vector(rho, d)
+        @test abs(λ) ≤ 1.0e-8
+        @test inner(id, rho) ≈ 1
+        @test abs(dot(v, r)) ≈ norm(v) * norm(r) rtol = 1.0e-6
+        @test first(last(obs.residuals)) ≤ 1.0e-6
+
+        # a correlated initial state reaches the same unit-trace steady state
+        _, rho′ = steadystate(𝓛, random_mps(ComplexF64, d; linkdims = 4); sskw...)
+        @test dense_vector(rho′, d) ≈ r rtol = 1.0e-6
     end
 end
