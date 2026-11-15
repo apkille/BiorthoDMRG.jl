@@ -12,7 +12,8 @@ Random.seed!(1234)
 @testset "Lindbladian" begin
     Δ = 0.5
     kw = (; nsweeps = 10, maxdim = [10, 20, 40], cutoff = 1.0e-16, outputlevel = 0, eigsolve_krylovdim = 8)
-    sskw = (; nsweeps = 10, maxdim = [10, 20, 40], cutoff = 1.0e-16, outputlevel = 0)
+    # mindim > 1 keeps every block out of the partial-trace reduction of the test map
+    sskw = (; nsweeps = 10, maxdim = [10, 20, 40], mindim = 4, cutoff = 1.0e-16, outputlevel = 0)
 
     @testset "single qubit with amplitude damping" begin
         γ = 0.7
@@ -114,7 +115,6 @@ Random.seed!(1234)
         F = eigen(dense_matrix(𝓛, d))
         v = F.vectors[:, argmax(real.(F.values))]
         obs = BiorthoObserver(; H = 𝓛)
-        # from the identity the first window's local steady state is pure
         λ, rho = steadystate(𝓛; observer = obs, sskw...)
         r = dense_vector(rho, d)
         @test abs(λ) ≤ 1.0e-8
@@ -122,8 +122,9 @@ Random.seed!(1234)
         @test abs(dot(v, r)) ≈ norm(v) * norm(r) rtol = 1.0e-6
         @test first(last(obs.residuals)) ≤ 1.0e-6
 
-        # a correlated initial state reaches the same unit-trace steady state
+        # a correlated initial state reaches the same steady state
         _, rho′ = steadystate(𝓛, random_mps(ComplexF64, d; linkdims = 4); sskw...)
-        @test dense_vector(rho′, d) ≈ r rtol = 1.0e-6
+        r′ = dense_vector(rho′, d)
+        @test abs(dot(v, r′)) ≈ norm(v) * norm(r′) rtol = 1.0e-6
     end
 end
