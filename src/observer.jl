@@ -7,8 +7,10 @@ Worst-case diagnostics over the bonds of one sweep.
 smallest cosine between the kept left and right bases, `cosangle_min` the
 smallest cosine between the local left and right eigenvectors before
 normalization, and `maxresidual` the largest relative residual of a local left or
-right eigenvector. `SweepStats()` is the starting value before any bond is
-visited.
+right eigenvector. For `steadystate`, `sigma_min` is the smallest cosine between the
+vectorized identity and the kept space of `rho`, and `cosangle_min` the smallest cosine
+between the local steady state and the trace functional. `SweepStats()` is the starting
+value before any bond is visited.
 """
 struct SweepStats
     maxtruncerr::Float64
@@ -19,10 +21,12 @@ end
 
 SweepStats() = SweepStats(0.0, Inf, 1.0, 0.0)
 
-function _merge_stats(s::SweepStats, solve_info, bond_info)
+# `s` after one more bond, from the local solver's `solve_info` and the bond's
+# truncation error and smallest cosine.
+function _merge_stats(s::SweepStats, solve_info; truncerr::Real, sigma_min::Real)
     return SweepStats(
-        max(s.maxtruncerr, bond_info.spec_psi.truncerr, bond_info.spec_chi.truncerr),
-        min(s.sigma_min, bond_info.sigma_min),
+        max(s.maxtruncerr, truncerr),
+        min(s.sigma_min, sigma_min),
         min(s.cosangle_min, solve_info.cosangle),
         max(s.maxresidual, solve_info.residual),
     )
@@ -31,9 +35,10 @@ end
 """
     BiorthoObserver(; H=nothing, residual_tol=0.0)
 
-Observer for `biorthodmrg` that records one entry per sweep. `energies` holds the
-energy, `conditions` the condition number `‖chi‖‖psi‖/|⟨chi|psi⟩|`, and `stats`
-the `SweepStats`.
+Observer for `biorthodmrg` and `steadystate` that records one entry per sweep.
+`energies` holds the energy, `conditions` the condition number
+`‖chi‖‖psi‖/|⟨chi|psi⟩|`, and `stats` the `SweepStats`. `steadystate` records the
+vectorized identity as `chi` and `rho` as `psi`.
 
 If `H` is given, `residuals` holds the relative residuals of `psi` and `chi`,
 computed with `H` and its adjoint `Hdag`, and the run stops after the first sweep

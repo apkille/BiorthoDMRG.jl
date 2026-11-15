@@ -17,33 +17,38 @@ function _adjoint_which(which::Symbol, E::Number, phi_chi::ITensor)
 end
 
 """
-    sssolver(P, phi_psi, phi_chi; tol, krylovdim, maxiter, verbosity)
+    sssolver(P::LindbladProjMPO, phi; tol, krylovdim, maxiter, verbosity)
 
-Local solver for the steady state of a Lindbladian, used as
-`biorthodmrg(𝓛, id; solver = sssolver)` with `id = vectorized_identity(d)`.
+Local solver of `steadystate`. With `⟨φ₁| = P.bra1` the trace functional on the window,
+`phi` is rescaled to unit trace, `⟨φ₁|phi⟩ = 1`, and GMRES started from zero solves
 
-`phi_chi` is the local block of the vectorized identity, which is an exact left
-null vector of `P`, so the steady state is a right null vector and there is no
-eigenvalue to select. The solver writes it as `x = x₀ + y`, with `x₀ = phi_psi`
-rescaled to unit trace and `y` orthogonal to `phi_chi`, and solves `P y = -P x₀`
-with GMRES inside that orthogonal complement, so the trace stays fixed.
-`phi_chi` is returned unchanged and `x` is normalized so that `⟨phi_chi|x⟩ = 1`.
-The returned value is the Rayleigh quotient of `x`, zero at convergence, and
-`info.residual` is `‖P x‖ / ‖x‖`.
+    P δ = P phi,    ⟨φ₁|δ⟩ = 0.
+
+Then `x = phi - δ` is the right null vector of `P` with unit trace, the result of one step
+of inverse iteration with the shift at the known eigenvalue `0`. `⟨φ₁|` is an exact left
+null vector of `P`, so `P` maps the orthogonal complement of `|φ₁⟩` into itself, and the
+projections onto that complement remove only rounding errors. The solution is unique if
+and only if the null space of `P` is one-dimensional and not orthogonal to `|φ₁⟩`.
+`tol`, `krylovdim`, `maxiter` and `verbosity` are passed to `KrylovKit.linsolve`.
+
+Returns `(λ, x, info)`. `λ` is the Rayleigh quotient of `x`, zero at convergence.
+`info.cosangle` is the cosine between `x` and `|φ₁⟩`, which vanishes as the null vector of
+`P` becomes orthogonal to `|φ₁⟩`, and `info.residual` is `‖P x‖ / ‖x‖`.
 """
 function sssolver(
-        P::AbstractBiorthoProjMPO, phi_psi::ITensor, phi_chi::ITensor;
-        tol::Real = 1.0e-14, krylovdim::Int = 30, maxiter::Int = 10, verbosity::Int = 0, kwargs...,
+        P::LindbladProjMPO, phi::ITensor;
+        tol::Real = 1.0e-14, krylovdim::Int = 30, maxiter::Int = 10, verbosity::Int = 0,
     )
-    û = phi_chi / norm(phi_chi)
+    û = dag(P.bra1) / norm(P.bra1)
     project(v) = v - û * scalar(dag(û) * v)
-    x0 = phi_psi / scalar(dag(û) * phi_psi)
-    y, _ = linsolve(v -> project(P(project(v))), -project(P(x0)), 0 * x0; tol, krylovdim, maxiter, verbosity)
-    x = x0 + project(y)
-    x /= scalar(dag(phi_chi) * x)
+    phi = phi / scalar(P.bra1 * phi)
+    δ, _ = linsolve(
+        v -> project(P(project(v))), project(P(phi)), 0 * phi; tol, krylovdim, maxiter, verbosity
+    )
+    x = phi - project(δ)
     Px = P(x)
     λ = scalar(dag(x) * Px) / scalar(dag(x) * x)
-    return λ, x, phi_chi, (; cosangle = 1 / (norm(phi_chi) * norm(x)), residual = norm(Px) / norm(x))
+    return λ, x, (; cosangle = 1 / (norm(P.bra1) * norm(x)), residual = norm(Px) / norm(x))
 end
 
 """

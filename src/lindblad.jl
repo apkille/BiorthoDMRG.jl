@@ -1,30 +1,4 @@
 """
-    doubled_siteinds(s)
-
-Site indices for vectorized density matrices on the sites `s`, ordered
-`[s₁, b₁, s₂, b₂, …]`. The physical index `sⱼ` carries the row (ket) index of ρ,
-and `bⱼ`, a new index of the same site type tagged `"bra"`, carries the column
-(bra) index.
-"""
-doubled_siteinds(s::Vector{<:Index}) = collect(Iterators.flatten((x, addtags(sim(x), "bra")) for x in s))
-
-"""
-    vectorized_identity(d)
-
-The identity matrix as an MPS on the doubled sites `d`, with bond dimension
-`dim(sⱼ)` inside each pair and `1` between pairs. Its overlap with a vectorized
-density matrix is the trace, so `inner(vectorized_identity(d), rho)` is `tr ρ`.
-"""
-function vectorized_identity(d::Vector{<:Index})
-    T = ITensor[]
-    for (s, b) in zip(d[1:2:end], d[2:2:end])
-        c = Index(dim(s), "Link")
-        push!(T, dense(delta(s, c)), dense(delta(c, b)))
-    end
-    return MPS(_chain(T))
-end
-
-"""
     lindbladian(H::MPO, jumps::Vector{ITensor}, d; cutoff = 1e-14)
 
 The Lindbladian `ρ ↦ -i[H, ρ] + Σₖ (Lₖ ρ Lₖ† - ½{Lₖ†Lₖ, ρ})` as an MPO acting on
@@ -33,11 +7,10 @@ an MPO on the physical sites `s`, and each jump operator is an ITensor on a sing
 physical site, for example `sqrt(γ) * op("S-", s[1])`. The terms are summed and
 compressed with `cutoff`.
 
-The steady state is the right null vector with unit trace. We can find it with
-`biorthodmrg(𝓛, vectorized_identity(d); solver = sssolver)`.
-
-The left eigenvector is
-`vectorized_identity(d)`, and `tr(Oρ)` is `inner(vectorized_identity(d), apply(O, rho))`. 
+The steady state is the right null vector with unit trace, and `vectorized_identity(d)`
+is an exact left null vector, so `tr(Oρ)` is `inner(vectorized_identity(d), apply(O, rho))`.
+`steadystate(𝓛; nsweeps)` finds the steady state with the left state held fixed at the
+identity.
 
 A single-site `"C"` carries no Jordan–Wigner string, so fermionic jump operators should 
 be written in a spin representation.
@@ -47,19 +20,6 @@ function lindbladian(H::MPO, jumps::Vector{ITensor}, d::Vector{<:Index}; cutoff:
         throw(DimensionMismatch("d must hold two indices for every site of H"))
     terms = [-im * _embed(H, d, :ket), im * _embed(H, d, :bra), (_dissipator(L, d) for L in jumps)...]
     return +(terms...; cutoff)
-end
-
-# join consecutive tensors that share no index with a link of dimension 1
-function _chain(T::Vector{ITensor})
-    T = copy(T)
-    for k in 1:(length(T) - 1)
-        if !hascommoninds(T[k], T[k + 1])
-            e = Index(1, "Link")
-            T[k] *= onehot(e => 1)
-            T[k + 1] *= onehot(e => 1)
-        end
-    end
-    return T
 end
 
 # `A` on the doubled sites: `A ⊗ 1` for `side = :ket`, `1 ⊗ Aᵀ` for `side = :bra`
