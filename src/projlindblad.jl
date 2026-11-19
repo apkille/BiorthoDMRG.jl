@@ -1,16 +1,15 @@
 """
     LindbladProjMPO(𝓛::MPO)
 
-The Lindbladian `𝓛`, an MPO on doubled sites ordered as by `doubled_siteinds`, projected
-onto a window of `rho` for the steady-state problem. The window covers two physical sites,
-the four doubled sites `ℓ:ℓ+3` with `ℓ` odd, or the whole chain when it has one physical
-site, so both of its cuts lie between physical sites. The left state is held fixed at the
+The Lindbladian `𝓛`, an MPO on the vectorized sites of `vectorized_siteinds`, projected
+onto a window of `rho` for the steady-state problem. The window covers the two sites
+`ℓ:ℓ+1`, or the whole chain when it has one site. The left state is held fixed at the
 vectorized identity `|1⟩`, which the site indices of `𝓛` determine; it is stored in `id`
-as an MPS of deltas and is never updated or truncated. `rho` is in the mixed canonical
+as a product MPS and is never updated or truncated. `rho` is in the mixed canonical
 gauge, so its blocks `L_ρ` and `R_ρ` outside the window are isometries.
 
-Across a cut between physical sites `|1⟩ = |1_L⟩ ⊗ |1_ℓ⟩ ⊗ |1_R⟩` factorizes, and the bra
-side is the test map `P_{ℓ1} = L₁ ⊗ 1 ⊗ R₁` with
+Every cut lies between physical sites, so `|1⟩ = |1_L⟩ ⊗ |1_ℓ⟩ ⊗ |1_R⟩` factorizes across
+both cuts of the window, and the bra side is the test map `P_{ℓ1} = L₁ ⊗ 1 ⊗ R₁` with
 
     L₁ = L_ρ + (1 - L_ρ L_ρ†) |1_L⟩⟨1_L|L_ρ / ⟨1_L|L_ρ L_ρ†|1_L⟩
 
@@ -53,13 +52,13 @@ Base.length(P::LindbladProjMPO) = length(P.𝓛)
 
 (P::LindbladProjMPO)(v::ITensor) = ITensors.product(P, v)
 
-# Doubled sites in a window: two physical sites, or the one site of a one-site chain.
-_windowsize(P::LindbladProjMPO) = min(4, length(P))
+# Sites in a window: two, or the one site of a one-site chain.
+_windowsize(P::LindbladProjMPO) = min(2, length(P))
 
 # Environment of the test map at one cut of the window, from the environments `A`, `B`
 # and `C` of ⟨rho|𝓛|rho⟩, ⟨1|𝓛|rho⟩ and ⟨1|rho⟩ on that side, where `λ` and `μ` are the
-# links of `rho` and `id` at the cut. The cut lies between physical sites, so `μ` has
-# dimension 1, `C = ⟨1_L|L_ρ` is a row vector, and
+# links of `rho` and `id` at the cut. Every link of `id` has dimension 1, so
+# `C = ⟨1_L|L_ρ` is a row vector, and
 #
 #     L₁†(·)L_ρ = L_ρ†(·)L_ρ + C† (⟨1_L|(·)L_ρ - C L_ρ†(·)L_ρ) / ‖C‖².
 #
@@ -72,7 +71,6 @@ function _testenv(A::ITensor, B::ITensor, C::ITensor, λ::Index, μ::Index)
 end
 
 function ITensorMPS.position!(P::LindbladProjMPO, rho::MPS, ℓ::Int)
-    isodd(ℓ) || throw(ArgumentError("a window starts at the ket copy of a site, at odd ℓ, got ℓ = $ℓ"))
     n = _windowsize(P)
     reposition!(P.env, P.𝓛, rho, rho, ℓ; nsite = n)
     reposition!(P.idenv, P.𝓛, P.id, rho, ℓ; nsite = n)

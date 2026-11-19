@@ -1,7 +1,7 @@
-# Starts `ℓ` of the windows of `n` doubled sites aligned with the ket–bra pairs, with
-# their half sweeps: left to right, then right to left.
-function _pairsweep(N::Int, n::Int)
-    ℓs = 1:2:(N - n + 1)
+# Starts `ℓ` of the windows of `n` sites, with their half sweeps: left to right, then
+# right to left.
+function _windowsweep(N::Int, n::Int)
+    ℓs = 1:(N - n + 1)
     return Iterators.flatten((((ℓ, 1) for ℓ in ℓs), ((ℓ, 2) for ℓ in reverse(ℓs))))
 end
 
@@ -9,7 +9,8 @@ end
 # successive SVDs truncated with `svd_kwargs`, starting from the side the sweep comes
 # from. With `ortho = "left"` every site but the last is a left isometry, and with
 # `ortho = "right"` every site but the first is a right isometry. Returns the spectrum of
-# the bond with the largest truncation error.
+# the bond with the largest truncation error, or an empty spectrum with no truncation
+# error for a one-site window, which has no bond.
 function _replacewindow!(rho::MPS, ks::UnitRange{Int}, phi::ITensor; ortho::String, svd_kwargs...)
     order = ortho == "left" ? ks : ortho == "right" ? reverse(ks) :
         throw(ArgumentError("ortho must be \"left\" or \"right\", got \"$ortho\""))
@@ -25,7 +26,7 @@ function _replacewindow!(rho::MPS, ks::UnitRange{Int}, phi::ITensor; ortho::Stri
         worst = isnothing(worst) || F.spec.truncerr > worst.truncerr ? F.spec : worst
     end
     rho[last(order)] = phi
-    return worst
+    return something(worst, Spectrum(nothing, 0.0))
 end
 
 """
@@ -33,20 +34,20 @@ end
     steadystate(𝓛::MPO, rho0::MPS; ...)
     steadystate(𝓛::MPO, rho0::MPS, sweeps::Sweeps; ...)
 
-DMRG for the steady state of the Lindbladian `𝓛`, an MPO on doubled sites ordered as by
-`doubled_siteinds`. Returns `(λ, rho)`: `rho` is the right null vector of `𝓛` with unit
+DMRG for the steady state of the Lindbladian `𝓛`, an MPO on the vectorized sites of
+`vectorized_siteinds`. Returns `(λ, rho)`: `rho` is the right null vector of `𝓛` with unit
 trace, and `λ` its Rayleigh quotient, which vanishes at convergence, both up to
 truncation.
 
 The left state stays fixed at the vectorized identity, which `LindbladProjMPO` builds
 from the site indices of `𝓛`, and only `rho` is swept, in the mixed canonical gauge.
-Each window covers two physical sites, so both of its cuts lie between physical sites,
-where the identity factorizes and the test map of `LindbladProjMPO` exists whenever
-`tr ρ ≠ 0`. At each window `sssolver` removes the traceless part of the window tensor,
-which is then split back into site tensors by SVDs truncated with `maxdim`, `mindim` and
-`cutoff`. `rho0` is any state on the sites of `𝓛` with nonzero trace; without it, the
-sweeps start from the maximally mixed state. The last form takes a `Sweeps` object; the
-others build it from the keywords.
+Each window covers two sites, and every cut lies between physical sites, where the
+identity factorizes and the test map of `LindbladProjMPO` exists whenever `tr ρ ≠ 0`. At
+each window `sssolver` removes the traceless part of the window tensor, which is then
+split back into site tensors by SVDs truncated with `maxdim`, `mindim` and `cutoff`.
+`rho0` is any state on the sites of `𝓛` with nonzero trace. Without it, the sweeps start
+from the maximally mixed state. The last form takes a `Sweeps` object, while the others build
+it from the keywords.
 
 `observer` is an ITensorMPS observer or a `BiorthoObserver`, which records the
 vectorized identity as the left state. `outputlevel` is as in `ITensorMPS.dmrg`, and the
@@ -77,7 +78,7 @@ function steadystate(
     λ = zero(ComplexF64)
     for sw in 1:nsw
         stats = SweepStats()
-        elapsed = @elapsed for (ℓ, ha) in _pairsweep(N, n)
+        elapsed = @elapsed for (ℓ, ha) in _windowsweep(N, n)
             window = ℓ:(ℓ + n - 1)
             ITensorMPS.position!(P, rho, ℓ)
             λ, phi, solve_info = sssolver(P, prod(k -> rho[k], window); solver_kwargs...)

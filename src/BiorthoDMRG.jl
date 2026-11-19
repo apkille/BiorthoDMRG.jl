@@ -11,7 +11,7 @@ normalizes ⟨φ_χ|φ_ψ⟩ = 1, and refactorizes both blocks, in one shared or
 or in a biorthonormal pair of bases.
 
 For the steady state of a Lindbladian 𝓛, `steadystate` holds the left state fixed at the
-vectorized identity |1⟩, which the doubled site indices determine, and keeps
+vectorized identity |1⟩, which the vectorized site indices determine, and keeps
 |ρ⟩ = P_{ℓρ}|φ_ρ⟩ in the mixed canonical gauge. With the test map P_{ℓ1} of
 `LindbladProjMPO`, which satisfies P_{ℓ1}†P_{ℓρ} = 1 and P_{ℓ1}|φ_1⟩ = |1⟩ for
 |φ_1⟩ = P_{ℓρ}†|1⟩, each bond update solves
@@ -22,9 +22,9 @@ and replaces |φ_ρ⟩ by |φ_ρ⟩ - |δφ⟩.
 """
 module BiorthoDMRG
 
-using ITensors: ITensors, ITensor, Index, addtags, array, commonind, dag, delta, dense, dim,
-    hascommoninds, hasqns, hassameinds, itensor, noprime, onehot, prime, replaceind,
-    replaceinds, scalar, sim, swapprime, uniqueinds
+using ITensors: ITensors, ITensor, Index, Spectrum, addtags, array, commonind, dag, delta,
+    dense, dim, hascommoninds, hasqns, hassameinds, itensor, noprime, onehot, prime,
+    replaceind, replaceinds, scalar, sim, swapprime, uniqueinds
 using ITensorMPS: ITensorMPS, MPO, MPS, Sweeps, firstsiteinds, inner, linkind, maxlinkdim,
     orthogonalize, siteind
 using KrylovKit: EigSorter, eigsolve, linsolve
@@ -34,11 +34,11 @@ using Printf: @printf
 export AbstractBiorthoProjMPO, BiorthoObserver, BiorthoProjMPO, BiorthoProjMPO_MPS,
     BiorthoProjMPS, BiorthoProjSum, LindbladProjMPO, MPIBiorthoSum, MPIObserver, adjoint_mpo,
     adjoint_product, biorthodmrg, biorthogonalize!, biorthoproblemsolver, sssolver,
-    biorthoreplacebond!, condition_number, doubled_siteinds, residuals, serve!, steadystate,
-    stopservice!, vectorized_identity
+    biorthoreplacebond!, condition_number, residuals, serve!, steadystate, stopservice!,
+    vectorize, vectorized_identity, vectorized_siteinds
 
 include("environments.jl")
-include("doubled.jl")
+include("vectorized.jl")
 include("projmpo.jl")
 include("projmps.jl")
 include("projsum.jl")
