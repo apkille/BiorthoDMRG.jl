@@ -22,9 +22,9 @@ and replaces |φ_ρ⟩ by |φ_ρ⟩ - |δφ⟩.
 """
 module BiorthoDMRG
 
-using ITensors: ITensors, ITensor, Index, addtags, array, commonind, dag, delta, dense, dim,
-    hascommoninds, hasqns, hassameinds, itensor, noprime, onehot, prime, replaceind,
-    replaceinds, scalar, sim, swapprime, uniqueinds
+using ITensors: ITensors, ITensor, Index, Spectrum, addtags, array, commonind, dag, delta,
+    dense, dim, hascommoninds, hasqns, hassameinds, itensor, noprime, onehot, prime,
+    replaceind, replaceinds, scalar, sim, swapprime, uniqueinds
 using ITensorMPS: ITensorMPS, MPO, MPS, Sweeps, firstsiteinds, inner, linkind, maxlinkdim,
     orthogonalize, siteind
 using KrylovKit: EigSorter, eigsolve, linsolve

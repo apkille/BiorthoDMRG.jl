@@ -9,7 +9,8 @@ end
 # successive SVDs truncated with `svd_kwargs`, starting from the side the sweep comes
 # from. With `ortho = "left"` every site but the last is a left isometry, and with
 # `ortho = "right"` every site but the first is a right isometry. Returns the spectrum of
-# the bond with the largest truncation error.
+# the bond with the largest truncation error, or an empty spectrum with no truncation
+# error for a one-site window, which has no bond.
 function _replacewindow!(rho::MPS, ks::UnitRange{Int}, phi::ITensor; ortho::String, svd_kwargs...)
     order = ortho == "left" ? ks : ortho == "right" ? reverse(ks) :
         throw(ArgumentError("ortho must be \"left\" or \"right\", got \"$ortho\""))
@@ -25,7 +26,7 @@ function _replacewindow!(rho::MPS, ks::UnitRange{Int}, phi::ITensor; ortho::Stri
         worst = isnothing(worst) || F.spec.truncerr > worst.truncerr ? F.spec : worst
     end
     rho[last(order)] = phi
-    return worst
+    return something(worst, Spectrum(nothing, 0.0))
 end
 
 """
