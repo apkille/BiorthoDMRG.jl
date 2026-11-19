@@ -38,7 +38,7 @@ export AbstractBiorthoProjMPO, BiorthoObserver, BiorthoProjMPO, BiorthoProjMPO_M
     vectorize, vectorized_identity, vectorized_siteinds
 
 include("environments.jl")
-include("doubled.jl")
+include("vectorized.jl")
 include("projmpo.jl")
 include("projmps.jl")
 include("projsum.jl")
