@@ -6,8 +6,8 @@ independently, so the plots can be checked by eye. They use these packages:
 ```julia
 using ITensors, ITensorMPS, BiorthoDMRG, GLMakie
 using LinearAlgebra: eigen, norm
-using BiorthoDMRG.Models: doubled_siteinds, ising_imaginary_field, lindbladian,
-    nonreciprocal_ssh, vectorized_identity, xxz
+using BiorthoDMRG.Models: ising_imaginary_field, lindbladian, nonreciprocal_ssh,
+    vectorized_identity, vectorized_siteinds, xxz
 ```
 
 ## Skin effect in the non-reciprocal SSH chain
@@ -218,14 +218,16 @@ Run it!
 ```julia
 N, ε = 10, 0.5
 s = siteinds("S=1/2", N)
-d = doubled_siteinds(s)
-id = vectorized_identity(d)
+v = vectorized_siteinds(s)
+id = vectorized_identity(v)
 jumps = [sqrt(ε) * op("S+", s[1]), sqrt(ε) * op("S-", s[N])]
 kw = (; nsweeps = 20, maxdim = [32, 64], cutoff = 1e-10, outputlevel = 0,
     solver = sssolver, eigsolve_tol = 1e-10, eigsolve_krylovdim = 30, eigsolve_maxiter = 10)
 
 # tr(Aᵢ Bⱼ ρ) / tr ρ for single-site operators A on site i and B on site j
-avg(rho, A, i, B = "Id", j = i) = inner(id, apply(op(A, s[i]), apply(op(B, s[j]), rho))) / inner(id, rho)
+avg(rho, A, i, B = "Id", j = i) =
+    inner(vectorize(adjoint_mpo(MPO(OpSum() + (A, i, B, j), s)), v), rho) / inner(id, rho)
+    λ, chi, rho = biorthodmrg(lindbladian(xxz(s; Δ), jumps, v), id; kw...)
 
 Δs = (0.5, 1.0, 1.5)
 results = map(Δs) do Δ

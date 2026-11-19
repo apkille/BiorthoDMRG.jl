@@ -5,13 +5,13 @@ Model Hamiltonians as MPOs, for examples and tests. All chains are open.
 """
 module Models
 
-using ITensors: ITensor, Index, commonind, dag, delta, dense, inds, onehot, op, prime,
+using ITensors: ITensor, Index, addtags, commonind, dag, delta, dense, inds, onehot, op, prime,
     replaceind, replaceinds, replaceprime, sim, swapprime
-using ITensorMPS: MPO, OpSum
-using ..BiorthoDMRG: _chain, doubled_siteinds, vectorized_identity
+using ITensorMPS: MPO, OpSum, firstsiteinds
+using ..BiorthoDMRG: _chain, _fuser, vectorized_identity, vectorized_siteinds
 
-export doubled_siteinds, ising_imaginary_field, lindbladian, nonreciprocal_ssh,
-    vectorized_identity, xxz
+export ising_imaginary_field, lindbladian, nonreciprocal_ssh, vectorized_identity,
+    vectorized_siteinds, xxz
 
 include("lindblad.jl")
 
